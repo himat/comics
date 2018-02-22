@@ -38,15 +38,20 @@ def print_hdf5_item_structure(item, offset='    '):
 
 # TODO: Take in the search pattern as an arg
 # TODO: Make this a class so you can initialize a default color for your entire program instead of having to use the default preset for all programs
-def colorize(s, col="blue"):
-    # find locations of {}
-    locs = [(m.start(), m.end()) for m in re.finditer("{}", s)]
+class Colorize:
 
-    color_start = globals()["C" + col.upper()]
-    for (start, end) in locs[::-1]:
-        s = s[:start] + color_start  + "{}" + CEND + s[end:]
+    def __init__(self, col="blue"):
+        self.col = col
+    
+    def __call__(self, string):
+        # find locations of {}
+        locs = [(m.start(), m.end()) for m in re.finditer("{}", string)]
 
-    return s
+        color_start = globals()["C" + self.col.upper()]
+        for (start, end) in locs[::-1]:
+            string = string[:start] + color_start  + "{}" + CEND + string[end:]
+
+        return string
 
 
 CEND      = '\33[0m'

@@ -1,7 +1,7 @@
 import time, sys, csv
 import h5py as h5
 from os.path import join
-import cPickle as pickle
+import pickle
 import numpy as np
 import random
 
@@ -18,6 +18,7 @@ def read_fold(csv_file, vdict, max_len=30):
         label[int(row['correct_answer'])] = 1
         for i in range(3):
             c = row['answer_candidate_%d_text' % i].split()
+            # candidates[i,:len(c)] = [vdict[w.encode("utf-8")] for w in c]
             candidates[i,:len(c)] = [vdict[w] for w in c]
             candidate_masks[i, :len(c)] = 1.
 
@@ -77,7 +78,7 @@ def save_fold(data, vdict, fold_name, num_pages, batch_size=1024,
 
             total_sum += len(batch[0])
 
-        print 'done with %d' % mb_start, total_sum
+        print('done with %d' % mb_start, total_sum)
 
 
 # takes a megabatch and generates a bunch of minibatches
@@ -107,7 +108,7 @@ def generate_minibatches_from_megabatch(data, vdict, mb_start, mb_end, batch_siz
     possible_candidates = set(zip(*possible_candidates))
     
     # compute number of UNKs per box for filtering
-    unks_in_candidates = np.sum((curr_words == vdict['UNK']), axis=-1)
+    unks_in_candidates = np.sum((curr_words == vdict[b'UNK']), axis=-1)
     unk_candidates = np.where(unks_in_candidates < max_unk)
     unk_candidates = set(zip(*unk_candidates))
     possible_candidates = possible_candidates.intersection(unk_candidates)
@@ -280,7 +281,7 @@ if __name__ == '__main__':
     for difficulty in ['easy', 'hard']:
         for fold in ['dev', 'test']:
 
-            print difficulty, fold
+            print(difficulty, fold)
 
             fold_data = comics_data[fold]
             imgs = fold_data['images']

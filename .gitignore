@@ -1,2 +1,8 @@
 data
 folds
+saves
+*/__pycache__/*
+
+**/*.pyc
+preprocess/*.pyc
+*.swp
