@@ -246,11 +246,11 @@ class ImageOnlyNetwork(nn.Module):
         assert(context_fc7_rep.dim() == 3)
         scores = torch.sum(context_fc7_rep * answers_rep, dim=2)
         # print("scores: ", scores.size())
-        if sys.version_info[0] < 3:
-            scores = scores.squeeze(dim=2)
-            preds = F.softmax(scores)
-        else:
-            preds = F.softmax(scores, dim=1)
+        # if sys.version_info[0] < 3:
+            # scores = scores.squeeze(dim=2)
+            # preds = F.softmax(scores)
+        # else:
+        preds = F.softmax(scores, dim=1)
 
         # print("final preds: ", preds.size())
         assert(preds.dim() == 2)
@@ -314,7 +314,7 @@ def train():
         batch_num += 1
 
         # Prints what fraction of the data is done training on
-        print_pts = [1/4, 1/2, 3/4]
+        print_pts = [1./4, 1./2, 3./4]
         for print_pt in print_pts:
             if batch_num == int(num_total_batches * print_pt):
                 print(print_pt, " done")
@@ -333,7 +333,7 @@ def train():
             # if args.gpuid > -1:
                 # for i in inputs:
                     # i.cuda()
-            in_context_fc7, in_context_bb, in_bbmask, in_context, in_cmask, in_answer_fc7, in_answer_bb, in_answers, in_amask= inputs
+            in_context_fc7, in_context_bb, in_bbmask, in_context, in_cmask, in_answer_fc7, in_answer_bb, in_answers, in_amask = inputs
             in_labels = inputs_raw[-1]
             # if args.gpuid > -1:
                 # print("Applying cuda")
@@ -371,7 +371,7 @@ if __name__ == "__main__":
     parser.add_argument("--d_word", default=256, type=int)
     parser.add_argument("--d_hidden", default=256, type=int)
     parser.add_argument("--lr", default=0.001, type=float)
-    parser.add_argument("--num-epochs", default=10, type=int)
+    parser.add_argument("--epochs", default=12, type=int)
     parser.add_argument("--megabatch-size", default=512, type=int)
     parser.add_argument("--batch-size", default=64, type=int)
     parser.add_argument("--gpuid", default=-1, type=int)
@@ -429,9 +429,13 @@ if __name__ == "__main__":
     if args.gpuid > -1:
         model.cuda()
 
+    print("Model parameters:")
+    for p in model.parameters():
+        print(p.size())
+    # sys.exit()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    # criterion = nn.CrossEntropyLoss(ignore_index=0) # Ignore padding which is 0
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=0) # Ignore padding which is 0
+    # criterion = nn.CrossEntropyLoss()
 
     best_val_loss = None
 
@@ -440,26 +444,31 @@ if __name__ == "__main__":
 
     # Can ctrl+C at any time to stop training early
     try:
-        for epoch in range(1, args.num_epochs+1):
+        for epoch in range(1, args.epochs+1):
             epoch_start_t = time.time()
             train()
             epoch_end_t = time.time()
 
             # epoch_log = 'Done with epoch %d in %d seconds, loss is %f' % (epoch, epoch_end_t - epoch_start_t, epoch_loss / len(train_batches))
-            epoch_log = 'Done with epoch %d in %d seconds' % (epoch, epoch_end_t - epoch_start_t)
+            epoch_log = 'Done with training for epoch %d in %d seconds' % (epoch, epoch_end_t - epoch_start_t)
             print(epoch_log)
             
             val_loss = validate('dev', dev_data, dev_fold)
             test_loss = validate('test', test_data, test_fold)
 
+            epoch_end_t = time.time()
+            epoch_log = 'Done with training/testing for epoch %d in %d seconds' % (epoch, epoch_end_t - epoch_start_t)
+            print(epoch_log)
+
             print(val_loss)
             print(test_loss)
 
             if not best_val_loss or val_loss < best_val_loss:
+                best_val_loss = val_loss
                 with open(model_save_file, "wb") as f:
                     torch.save(model, f)
-            else:
-                args.lr /= 1.0 # 4.0 # anneal the lr if no improvements in val
+            # else:
+                # args.lr /= 1.0 # 4.0 # anneal the lr if no improvements in val
 
     except KeyboardInterrupt:
         print("-" * BAR_WIDTH)
