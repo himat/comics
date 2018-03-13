@@ -432,7 +432,7 @@ if __name__ == "__main__":
     print("Model parameters:")
     for p in model.parameters():
         print(p.size())
-    sys.exit()
+    # sys.exit()
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     criterion = nn.CrossEntropyLoss(ignore_index=0) # Ignore padding which is 0
     # criterion = nn.CrossEntropyLoss()
