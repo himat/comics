@@ -24,8 +24,9 @@ class PLSTMCell(nn.Module):
             torch.FloatTensor(hidden_size, 4 * hidden_size))
         
         # TODO: can make weight_ch a vector instead of matrix, then use hadamard in forward step
-        self.weight_ch = nn.Parameter(
-            torch.FloatTensor(hidden_size, 4 * hidden_size))
+        self.weight_ch_i = nn.Parameter(torch.FloatTensor(hidden_size))
+        self.weight_ch_f = nn.Parameter(torch.FloatTensor(hidden_size))
+        self.weight_ch_o = nn.Parameter(torch.FloatTensor(hidden_size))
 
         if use_bias:
             self.bias = nn.Parameter(torch.FloatTensor(4 * hidden_size))
@@ -43,9 +44,15 @@ class PLSTMCell(nn.Module):
         weight_hh_data = weight_hh_data.repeat(1, 4)
         self.weight_hh.data.set_(weight_hh_data)
        
-        weight_ch_data = torch.eye(self.hidden_size)
-        weight_ch_data = weight_ch_data.repeat(1, 4)
-        self.weight_ch.data.set_(weight_ch_data)
+        # weight_ch_data = torch.eye(self.hidden_size)
+        # weight_ch_data = weight_ch_data.repeat(1, 4)
+        # self.weight_ch.data.set_(weight_ch_data)
+        # init.constant(self.weight_ch_i, val=0)
+        # init.constant(self.weight_ch_f, val=0)
+        # init.constant(self.weight_ch_o, val=0)
+        init.normal(self.weight_ch_i)
+        init.normal(self.weight_ch_f)
+        init.normal(self.weight_ch_o)
 
         # The bias is just set to zero vectors.
         if self.use_bias:
@@ -70,11 +77,20 @@ class PLSTMCell(nn.Module):
                       .expand(batch_size, *self.bias.size()))
         wh_b = torch.addmm(bias_batch, h_0, self.weight_hh)
         wi = torch.mm(input_, self.weight_ih)
-        wc = torch.mm(c_0, self.weight_ch)
+        # wc = torch.mm(c_0, self.weight_ch)
 
-        f, i, o, g = torch.split(wc + wh_b + wi,
+        f, i, o, g = torch.split(wh_b + wi,
                                  split_size=self.hidden_size, dim=1)
+        weight_ch_i_batch = self.weight_ch_i.unsqueeze(0).expand(batch_size, *self.weight_ch_i.size())
+        weight_ch_f_batch = self.weight_ch_f.unsqueeze(0).expand(batch_size, *self.weight_ch_f.size())
+        weight_ch_o_batch = self.weight_ch_o.unsqueeze(0).expand(batch_size, *self.weight_ch_o.size())
+        i = i + c_0 * weight_ch_i_batch
+        f = f + c_0 * weight_ch_f_batch
+
         c_1 = torch.sigmoid(f)*c_0 + torch.sigmoid(i)*torch.tanh(g)
+
+        o = o + c_1 * weight_ch_o_batch
+
         h_1 = torch.sigmoid(o) * torch.tanh(c_1)
         return h_1, c_1
 
