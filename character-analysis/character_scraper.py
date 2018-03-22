@@ -1,9 +1,11 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import re
 
-csv_heroes_file = "heroes.csv"
-csv_villains_file = "villains.csv"
+dirname = os.path.dirname(__file__)
+csv_heroes_file = os.path.join(dirname, "heroes.csv")
+csv_villains_file = os.path.join(dirname, "villains.csv")
 
 golden_age_protagonists_page = "http://pdsh.wikia.com/wiki/Category:Protagonists"
 golden_age_villains_page = "https://en.wikipedia.org/wiki/Category:Golden_Age_supervillains"
@@ -39,6 +41,7 @@ def download_protagonists():
         for li in all_heroes:
             # Some hero names have the publisher in parens if multiple publishers had comics with the same hero name 
             hero = re.sub(remove_parens_find, remove_parens_repl, li.text).strip()
+            hero = hero.replace('"', '') # remove quotes if any in name
             if hero not in hero_excludes:
                 heroes.add(hero)
 
@@ -62,6 +65,8 @@ def download_villains():
     villains = set()
     for name_div in names:
         villain = re.sub(remove_parens_find, remove_parens_repl, name_div.text).strip()
+        villain = villain.replace('"', '') # remove quotes if any in name
+
         if villain not in villain_excludes:
             villains.add(villain) 
 
@@ -72,7 +77,7 @@ def download_villains():
         for villain in sorted(villains):
             out_file.write("\"" + villain + "\"\n")
 
-    print(f"Saved villains to {csv_heroes_file}")
+    print(f"Saved villains to {csv_villains_file}")
 
 if __name__=="__main__":
     # download_protagonists()
