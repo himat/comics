@@ -49,7 +49,7 @@ def download_protagonists():
     # Write to CSV in alphabetical order
     with open(csv_heroes_file, "w") as out_file:
         for hero in sorted(heroes):
-            out_file.write(hero + "\n")
+            out_file.write("\"" + hero + "\"\n")
 
     print(f"Saved heroes to {csv_heroes_file}")
 
@@ -70,7 +70,7 @@ def download_villains():
     # Write to CSV in alphabetical order
     with open(csv_villains_file, "w") as out_file:
         for villain in sorted(villains):
-            out_file.write(villain + "\n")
+            out_file.write("\"" + villain + "\"\n")
 
     print(f"Saved villains to {csv_heroes_file}")
 
