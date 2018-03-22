@@ -1,6 +1,7 @@
-data
-folds
-saves
+data/
+folds/
+saves/
+vgg16/
 */__pycache__/*
 
 **/*.pyc
