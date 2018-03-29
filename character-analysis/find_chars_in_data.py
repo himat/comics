@@ -1,13 +1,16 @@
 import os, sys
 import pandas as pd 
 from collections import defaultdict
+import pickle
 
 dirname = os.path.dirname(__file__)
 comics_ocr_file = os.path.join(dirname, "../data/COMICS_ocr_file.csv")
 heroes_file = os.path.join(dirname, "./heroes.csv")
 villains_file = os.path.join(dirname, "./villains.csv")
+save_indices_file = "chars_in_text_lines.pkl"
 
-def main():
+# Finds each character in the text and prints them with the number of lines they were found in 
+def print_all_char_counts():
    
     # Filter false so it doesn't replace empty strings with NaN
     comics_df = pd.read_csv(comics_ocr_file, na_filter=False)
@@ -39,7 +42,6 @@ def main():
     found_heroes = defaultdict(int)
     found_villains = defaultdict(int)
 
-
     for hero in heroes_names.values:
         hero = hero.lower()
 
@@ -61,5 +63,48 @@ def main():
     print(f"\nNumber of given villains found in comics text: {len(found_villains)} / {len(villains_names)}")
     print("Found villains: ", sorted_villain_counts)
 
+# Finds the lines associated with a character and saves them to a file
+def save_char_indices():
+
+    # Filter false so it doesn't replace empty strings with NaN
+    comics_df = pd.read_csv(comics_ocr_file, na_filter=False)
+    comics_text = comics_df.text
+    heroes_names = pd.read_csv(heroes_file).Name
+    villains_names = pd.read_csv(villains_file).Name
+
+    heroes_names = heroes_names.str.lower()
+    villains_names = villains_names.str.lower()
+
+    found_heroes = defaultdict(list)
+    found_villains = defaultdict(list)
+
+    # limit = 5
+    # done = False
+
+    for hero in heroes_names.values:
+
+        for (i, line) in enumerate(comics_text):
+            if hero in line:
+                found_heroes[(hero,'h')].append(line)
+
+            # if limit < 0:
+                # done = True
+                # break
+
+        # limit -= 1
+        # if done:
+            # break
+
+    # for villain in villains_names.values:
+
+        # for line in comics_text:
+            # if villain in line:
+                # found_villains[villain] += 1
+
+    # Save results
+    with open(save_indices_file, 'wb') as fh:
+        pickle.dump(found_heroes, fh)
+
 if __name__ == "__main__":
-    main()
+    # print_all_char_counts()
+    save_char_indices()
