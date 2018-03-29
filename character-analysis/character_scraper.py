@@ -16,6 +16,25 @@ villain_excludes = set(["Alternative versions of Joker"])
 remove_parens_find = r"(.*)\(.*\)"
 remove_parens_repl = r"\1"
 
+# process and verify given character name string
+# returns false if this character name should not be added to results
+def process_name(in_char_name):
+
+    # Some hero names have the publisher in parens if multiple publishers had comics with the same hero name 
+    char_name = re.sub(remove_parens_find, remove_parens_repl, in_char_name).strip() # remove anything in parens
+    char_name = char_name.replace('"', '') # remove quotes if any in name
+    if char_name.isdigit(): # skip if character name is all numbers
+        return False, None
+    if char_name in hero_excludes:
+        return False, None
+    if char_name in villain_excludes:
+        return False, None
+
+    if len(char_name) <= 2: # Ignore short names
+        return False, None
+
+    return True, char_name
+
 def download_protagonists():
     response = requests.get(golden_age_protagonists_page)
     root = BeautifulSoup(response.content, "html.parser")
@@ -39,13 +58,12 @@ def download_protagonists():
 
         num_heroes = len(all_heroes)
         for li in all_heroes:
-            # Some hero names have the publisher in parens if multiple publishers had comics with the same hero name 
-            hero = re.sub(remove_parens_find, remove_parens_repl, li.text).strip()
-            hero = hero.replace('"', '') # remove quotes if any in name
-            if hero not in hero_excludes:
-                heroes.add(hero)
 
-        print(f"Page {page_num} has {num_heroes} heroes")
+            add_to_set, hero_name = process_name(li.text)
+            if add_to_set:
+                heroes.add(hero_name)
+
+        print(f"Page {page_num} has {num_heroes} total heroes")
 
     print(f"There are {len(heroes)} total heroes (without repeats)")
 
@@ -65,11 +83,11 @@ def download_villains():
 
     villains = set()
     for name_div in names:
-        villain = re.sub(remove_parens_find, remove_parens_repl, name_div.text).strip()
-        villain = villain.replace('"', '') # remove quotes if any in name
 
-        if villain not in villain_excludes:
-            villains.add(villain) 
+        add_to_set, villain_name = process_name(name_div.text)
+
+        if add_to_set:
+            villains.add(villain_name) 
 
     print(f"There are {len(villains)} villains (without repeats)")
 
@@ -82,5 +100,5 @@ def download_villains():
     print(f"Saved villains to {csv_villains_file}")
 
 if __name__=="__main__":
-    # download_protagonists()
-    download_villains()
+    download_protagonists()
+    # download_villains()
