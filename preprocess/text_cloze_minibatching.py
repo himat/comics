@@ -18,8 +18,8 @@ def read_fold(csv_file, vdict, max_len=30):
         label[int(row['correct_answer'])] = 1
         for i in range(3):
             c = row['answer_candidate_%d_text' % i].split()
-            # candidates[i,:len(c)] = [vdict[w.encode("utf-8")] for w in c]
-            candidates[i,:len(c)] = [vdict[w] for w in c]
+            candidates[i,:len(c)] = [vdict[w.encode("utf-8")] for w in c]
+            # candidates[i,:len(c)] = [vdict[w] for w in c]
             candidate_masks[i, :len(c)] = 1.
 
         fold_dict[key] = [candidates, candidate_masks, label]
