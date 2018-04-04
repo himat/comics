@@ -36,6 +36,9 @@ def validate(fold_name, fold_data, fold_file, val_batch_size=1024):
 
             in_context_fc7, in_context_bb, in_bbmask, in_context, in_cmask, in_answer_fc7, in_answer_bb, in_answers, in_amask= inputs
 
+            batch_size = in_context_fc7.size(0)
+
+            model.lstm_hiddens = model.init_lstm_hidden(batch_size)
             preds = model(inputs)
             labels = np.argmax(batch[-1], axis=-1)
             # max_preds = np.argmax(preds, axis=1)
@@ -67,18 +70,40 @@ class TextOnlyNetwork(nn.Module):
 
         super(TextOnlyNetwork, self).__init__()
 
+        self.context_len = 3
+
         self.d_word = d_word
         self.d_hidden = d_hidden
 
         # Both context and answers share the same embedding 
         self.l_context_answers_emb = nn.Embedding(vocab_len, d_word)
 
+        self.lstm_hiddens = None
 
         # TODO: check if batch_first needs to be true, print out size ************************
-        # self.l_box_lstm = nn.LSTM(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
-        self.l_box_lstm = nn.GRU(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
+        self.l_box_lstm = nn.LSTM(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
+        # self.l_box_lstm = nn.GRU(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
 
-        self.l_context_box_lstm = nn.GRU(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
+        self.l_context_box_lstm = nn.LSTM(input_size=d_word, hidden_size=d_word, num_layers=1, batch_first=True)
+
+    def init_lstm_hidden(self, batch_size):
+        num_dirs_times_num_layers = 1
+
+        box_dims = (num_dirs_times_num_layers, batch_size*self.context_len, self.d_hidden)
+        context_box_dims = (num_dirs_times_num_layers, batch_size, self.d_hidden)
+
+        l_box_lstm_hidden = (autograd.Variable(torch.zeros(*box_dims)), 
+                             autograd.Variable(torch.zeros(*box_dims)))
+        l_context_box_lstm_hidden = (autograd.Variable(torch.zeros(*context_box_dims)), 
+                                     autograd.Variable(torch.zeros(*context_box_dims)))
+
+        hiddens = {"box": l_box_lstm_hidden, "context_box": l_context_box_lstm_hidden}
+
+
+        if args.gpuid > -1:
+            hiddens = {key: (values[0].cuda(), values[1].cuda()) for key, values in hiddens.items()}
+
+        return hiddens
 
     def forward(self, inputs):
 
@@ -98,6 +123,7 @@ class TextOnlyNetwork(nn.Module):
         # in_context: mb_size x num_panels x max_boxes x max_words
         # === 64 x 3 x 3 x 30 
         context_length = in_context_fc7.size()[1]
+        assert(context_length == self.context_len)
 
         # Context transforms
         # print("in context: ", in_context.size())
@@ -123,13 +149,13 @@ class TextOnlyNetwork(nn.Module):
 
         masked_context_box = context_box * bb_mask # 192 x 3 x 256
         # print("masked context box: ", masked_context_box.size())
-        box_lstmed, (states_lstm) = self.l_box_lstm(masked_context_box) # 192 x 3 x 256
+        box_lstmed, self.lstm_hiddens["box"] = self.l_box_lstm(masked_context_box, self.lstm_hiddens["box"]) # 192 x 3 x 256
         box_lstmed = box_lstmed[:, 2, :]
         # print("box lstmed: ", box_lstmed.size())
 
         box_lstmed = box_lstmed.view(-1, context_length, self.d_word) # 64 x 3 x 256
 
-        context_box_final, (states_n) = self.l_context_box_lstm(box_lstmed) # 64 x 3 x 256
+        context_box_final, self.lstm_hiddens["context_box"] = self.l_context_box_lstm(box_lstmed, self.lstm_hiddens["context_box"]) # 64 x 3 x 256
         # print("context box final: ", context_box_final.size())
         context_box_final = context_box_final[:, 2, :] # 64 x 256
 
@@ -170,19 +196,21 @@ class ImageOnlyNetwork(nn.Module):
 
         # TODO define constant for 4096 as number of fc7 features
         self.context_fc7_linear = nn.Linear(4096, d_hidden)
+
+        self.lstm_hiddens = None
         self.context_fc7_lstm = nn.LSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
         # self.context_fc7_lstm = PLSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
         
         self.answer_embedding = nn.Embedding(vocab_len, d_word)
 
-    def init_lstm_hidden(batch_size):
+    def init_lstm_hidden(self, batch_size):
         num_dirs_times_num_layers = 1
 
-        dims = (num_dir_times_num_layers, batch_size, self.d_hidden)
+        dims = (num_dirs_times_num_layers, batch_size, self.d_hidden)
 
         if args.gpuid > -1:
-            return (autograd.Variable(torch.zeros(*dims).cuda()),
-                    autograd.Variable(torch.zeros(*dims).cuda()))
+            return (autograd.Variable(torch.zeros(*dims)).cuda(),
+                    autograd.Variable(torch.zeros(*dims)).cuda())
         else:
             return (autograd.Variable(torch.zeros(*dims)),
                     autograd.Variable(torch.zeros(*dims)))
@@ -211,7 +239,7 @@ class ImageOnlyNetwork(nn.Module):
         # TODO: get the layer output size instead of using d_hidden here in case it changes in the init layer, this isn't safe
         context_fc7_lin = context_fc7_lin.view(context_length, -1, self.d_hidden)
         # print("contextfc7lin size after view: ", context_fc7_lin.size())
-        context_fc7_rep_all, (h_n, c_n) = self.context_fc7_lstm(context_fc7_lin) # 3 x 64 x 256
+        context_fc7_rep_all, self.lstm_hiddens = self.context_fc7_lstm(context_fc7_lin, self.lstm_hiddens) # 3 x 64 x 256
         # print("context fc 7 rep all: ", context_fc7_rep_all.size())
 
         context_fc7_rep = context_fc7_rep_all[2,:,:] # 64 x 256
@@ -353,7 +381,9 @@ def train():
                 # in_answer_fc7.cuda()
                 # in_answers.cuda()
                 # in_amask.cuda()
+            batch_size = in_labels.shape[0]
 
+            model.lstm_hiddens = model.init_lstm_hidden(batch_size)
             preds = model(inputs)
 
             true_labels_one_hot = torch.from_numpy(in_labels).long()
