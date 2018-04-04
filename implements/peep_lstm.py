@@ -222,7 +222,7 @@ class PLSTM(nn.Module):
                 length = length.cuda(device)
         if hx is None:
             hx = Variable(input_.data.new(batch_size, self.hidden_size).zero_())
-            hx = (hx, hx)
+            hx = (hx, hx) # TODO: shouldn't be two separate things??
         h_n = []
         c_n = []
         layer_output = None

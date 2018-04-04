@@ -152,8 +152,8 @@ class TextOnlyNetwork(nn.Module):
         # print("answers rep: ", answers_rep.size())
 
         context_box_final = context_box_final[:, None, :].expand_as(answers_rep)
-        scores = torch.sum(context_box_final * answers_rep, dim=2).squeeze(dim=2)
-        preds = F.softmax(scores)
+        scores = torch.sum(context_box_final * answers_rep, dim=2) #.squeeze(dim=2)
+        preds = F.softmax(scores, dim=1)
 
         return preds
 
