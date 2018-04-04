@@ -170,10 +170,22 @@ class ImageOnlyNetwork(nn.Module):
 
         # TODO define constant for 4096 as number of fc7 features
         self.context_fc7_linear = nn.Linear(4096, d_hidden)
-        # self.context_fc7_lstm = nn.LSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
-        self.context_fc7_lstm = PLSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
+        self.context_fc7_lstm = nn.LSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
+        # self.context_fc7_lstm = PLSTM(input_size=d_hidden, hidden_size=d_hidden, num_layers=1)
         
         self.answer_embedding = nn.Embedding(vocab_len, d_word)
+
+    def init_lstm_hidden(batch_size):
+        num_dirs_times_num_layers = 1
+
+        dims = (num_dir_times_num_layers, batch_size, self.d_hidden)
+
+        if args.gpuid > -1:
+            return (autograd.Variable(torch.zeros(*dims).cuda()),
+                    autograd.Variable(torch.zeros(*dims).cuda()))
+        else:
+            return (autograd.Variable(torch.zeros(*dims)),
+                    autograd.Variable(torch.zeros(*dims)))
 
     def forward(self, inputs):
 
@@ -352,11 +364,11 @@ def train():
                 true_labels = true_labels.cuda()
             # print("true labels: ", true_labels.size())
             loss = criterion(preds, true_labels)
-            epoch_loss += loss
+            epoch_loss += loss.data[0]
             loss.backward()
             optimizer.step()
 
-    print("Loss for epoch {}: {}\n".format(epoch, epoch_loss.data.cpu().numpy()))
+    print("Loss for epoch {}: {}\n".format(epoch, epoch_loss))
 
 
 if __name__ == "__main__":
