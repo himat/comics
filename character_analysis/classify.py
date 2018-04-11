@@ -14,16 +14,16 @@ def classify_single_line():
 
     character_line_dict = load_char_indices()
 
-    # k = ("Ace Buckley", 'h')
+    k = ("ace buckley", 'h')
 
-    # print(len(character_line_dict[k]))
-    # print(character_line_dict[k])
+    print(len(character_line_dict[k]))
+    print(character_line_dict[k])
 
     print(len(character_line_dict))
 
-    for key in character_line_dict:
-        print(key)
-        print(character_line_dict[key])
+    # for key in character_line_dict:
+        # print(key)
+        # print(character_line_dict[key])
 
 if __name__ == "__main__":
     classify_single_line()
