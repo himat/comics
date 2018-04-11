@@ -3,7 +3,6 @@
 # This file runs a folder of images through a VGG-16 network and prints the top
 #   5 classes predicted.
 ######
-
 import keras
 import cv2
 from keras.preprocessing import image
@@ -13,15 +12,14 @@ import random
 import os
 import json
 import argparse
+from viz_vgg import *
 
 do_print = False
+do_viz_cam = False
 
 vgg_weights_file = "../vgg16/vgg16_weights_tf_dim_ordering_tf_kernels.h5"
 vgg_classes_file = "../vgg16/imagenet_class_index.json"
 images_base_folder = "../data/raw_panel_images/"
-    
-# VGG 16 input dims
-input_img_dims = (224, 224)
 
 bad_classes = ["comic_book", "book_jacket"]
 
@@ -39,6 +37,7 @@ def parse_args():
     parser.add_argument("--invert", action="store_true", help="Invert image colors before passing through classifier")
     parser.add_argument("--show-images", action="store_true", help="Render images that are not badly classified")
     parser.add_argument("--do-print", action="store_true", help="Print things out")
+    parser.add_argument("--viz-cam", action="store_true", help="Show highest activations on image")
     args = parser.parse_args()
 
     return args
@@ -65,14 +64,15 @@ def print_top_k(class_probs, k=5):
     assert(k <= len(class_probs))
 
     highest_classes = np.argpartition(class_probs, -k)[-k:]
-    highest_classes = highest_classes[np.argsort(class_probs[highest_classes])[::-1]]
+    highest_indices = np.argsort(class_probs[highest_classes])[::-1]
+    highest_classes = highest_classes[highest_indices]
 
     if do_print:
         for high_class in highest_classes:
             print(f"{classes_num_to_name[high_class]} with prob: {class_probs[high_class]}")
 
     highest_classes = [classes_num_to_name[high_class] for high_class in highest_classes]
-    return highest_classes
+    return highest_classes, highest_indices
 
 def classify_image(model_vgg16, image_file, image_color, invert_colors):
 
@@ -101,7 +101,7 @@ def classify_image(model_vgg16, image_file, image_color, invert_colors):
     class_probs = model_vgg16.predict(processed_img)
     assert(class_probs.shape == (1, 1000))
 
-    return class_probs, transformed_img
+    return class_probs, img, transformed_img, processed_img
 
 
 # images_folder: folder that directly contains the images (no subfolders inside it)
@@ -119,9 +119,14 @@ def classify_in_folder(model_vgg16, images_folder, image_color, invert_colors, s
             print(f"\n\nim file: {image_file}")
         num_total_images += 1
 
-        class_probs, transformed_img = classify_image(model_vgg16, image_file, image_color, invert_colors)
+        class_probs, img, transformed_img, processed_img = classify_image(model_vgg16, image_file, image_color, invert_colors)
 
-        highest_classes = print_top_k(class_probs, k=5)
+        highest_classes, highest_indices = print_top_k(class_probs, k=10)
+
+
+        if do_viz_cam:
+            cv2.imshow("original", img)
+            viz_cam(model_vgg16, processed_img, highest_indices[0])
 
         if highest_classes[0] in bad_classes:
             num_bad_classified += 1
@@ -142,27 +147,43 @@ def classify_in_folder(model_vgg16, images_folder, image_color, invert_colors, s
 
     return num_bad_classified, num_total_images
 
+def viz_cam(model, preprocessed_input, predicted_class):
+    layer_name = "block5_conv3"
+    run_grad_cam(model, preprocessed_input, predicted_class, layer_name)
+
 def main():
     args = parse_args()
 
     global do_print
+    global do_viz_cam
     do_print = args.do_print
+    do_viz_cam = args.viz_cam
+
+    # if args.viz_cam:
+        # assert(args.single) # Makes sure to only run one image if visualizing cam
 
     os.environ["CUDA_VISIBLE_DEVICES"]=str(args.gpu)
 
     image_color = cv2.IMREAD_GRAYSCALE if args.bw else cv2.IMREAD_UNCHANGED
     
     # Load the model
-    model_vgg16 = VGG16()
-    model_vgg16.load_weights(vgg_weights_file)
+    model_vgg16 = VGG16(weights='imagenet')
+    # model_vgg16.load_weights(vgg_weights_file)
 
     if args.single:
         print("Classifying single image ", args.single)
         image_file = args.single
-        class_probs, transformed_img = classify_image(model_vgg16, image_file, image_color, args.invert)
+        class_probs, img, transformed_img, processed_img = classify_image(model_vgg16, image_file, image_color, args.invert)
 
         do_print = True
-        highest_classes = print_top_k(class_probs, k=5)
+        highest_classes, highest_indices = print_top_k(class_probs, k=10)
+
+        # TODO: why is this wrong
+        # print(highest_indices[0])
+        best_index = np.argmax(class_probs)
+
+        if args.viz_cam:
+            viz_cam(model_vgg16, processed_img, highest_indices[0])
 
         assert(transformed_img.ndim==3)
         transformed_img = transformed_img.astype("uint8")
@@ -189,7 +210,7 @@ def main():
         print("\n\n{}/{} ({}%) images classified as one of {}".format(num_bad_classified, num_total_images, error_rate, bad_classes))
     else: # Choose a single random directory
         images_folder_num = random.choice(os.listdir(images_base_folder))
-        images_folder_num = "999"
+        # images_folder_num = "999"
         images_folder = images_base_folder + images_folder_num + "/"
         classify_in_folder(model_vgg16, images_folder, image_color, args.invert, args.show_images)
 
