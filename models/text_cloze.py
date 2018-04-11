@@ -362,7 +362,8 @@ def train():
 
         # print("Train batches ", start, ", ", end)
         for batch in generate_minibatches_from_megabatch(train_data, vdict, start, end, max_unk=30, context_size=3, difficulty=args.difficulty, shuffle_candidates=True):
-            optimizer.zero_grad()
+            # optimizer.zero_grad()
+            model.zero_grad()
 
             inputs_raw = batch[1:]
             inputs = []
