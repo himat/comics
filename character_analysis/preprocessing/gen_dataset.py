@@ -131,7 +131,9 @@ def create_dataset():
                                        CHAR_TYPE: CHAR_TYPE_VILLAIN})
 
 
-        if len(generated_data) == 8000:
+        data_limit = 10000
+        if len(generated_data) == data_limit:
+            print(f"Reached data limit of {data_limit}")
             break
 
     print("\n\nGenerating data with random non-character names removed")

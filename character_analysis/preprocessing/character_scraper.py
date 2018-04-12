@@ -4,10 +4,10 @@ from bs4 import BeautifulSoup
 import re
 
 dirname = os.path.dirname(__file__)
-csv_heroes_all_file = os.path.join(dirname, "heroes_unfiltered.csv")
-csv_heroes_file = os.path.join(dirname, "heroes.csv")
-csv_villains_all_file = os.path.join(dirname, "villains_unfiltered.csv")
-csv_villains_file = os.path.join(dirname, "villains.csv")
+csv_heroes_all_file = os.path.join(dirname, "../data/heroes_unfiltered.csv")
+csv_heroes_file = os.path.join(dirname, "../data/heroes.csv")
+csv_villains_all_file = os.path.join(dirname, "../data/villains_unfiltered.csv")
+csv_villains_file = os.path.join(dirname, "../data/villains.csv")
 
 golden_age_protagonists_page = "http://pdsh.wikia.com/wiki/Category:Protagonists"
 golden_age_villains_page = "https://en.wikipedia.org/wiki/Category:Golden_Age_supervillains"
