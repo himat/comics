@@ -44,7 +44,7 @@ def train_epoch(data, des_batch_size, model, loss_function, optimizer):
     print_mod = num_batches / 4
     for batch in np.array_split(data, num_batches):
 
-        if batch % print_mod == 0:
+        if b_count % print_mod == 0:
             print(f"Batch: {b_count}/{num_batches}")
         b_count += 1
 
@@ -160,16 +160,78 @@ def train(data, args, vocab_len):
 
     print("Done training")
 
+    return model
+
+def process_input_batch(batch, args):
+    text = batch[COL_TEXT].values
+    is_char_labels = batch[COL_IS_CHAR].values
+
+    words = [sentence.split() for sentence in text]
+    unk_encoding = vdict["UNK".encode("utf-8")]
+
+    text_transformed = [[vdict[w.encode("utf-8")] if w.encode("utf-8") in vdict else unk_encoding for w in seq] for seq in words]
+
+    seq_lens = torch.LongTensor(list(map(len, text_transformed)))
+    if args.gpuid > -1:
+        seq_lens = seq_lens.cuda()
+
+    seq_tensor = torch.autograd.Variable(torch.zeros((len(text_transformed), seq_lens.max())).long())
+    if args.gpuid > -1:
+        seq_tensor = seq_tensor.cuda()
+    for i, (seq, seqLen) in enumerate(zip(text_transformed, seq_lens)):
+        seq_tensor[i, :seqLen] = torch.LongTensor(seq)
+
+    seq_lens, perm_idx = seq_lens.sort(dim=0, descending=True)
+    seq_tensor = seq_tensor[perm_idx]
+
+    # labels
+    index_labels = torch.LongTensor(is_char_labels.astype(int))
+
+    return seq_tensor, index_labels
+
+
+def validate(model, data, args):
+
+    cprint(f"Testing mode", "blue")
+
+    num_batches = len(data) // args.batch_size
+
+    num_total = 0
+    num_correct = 0
+
+    for batch in np.array_split(data, num_batches):
+
+        curr_batch_size = batch.shape[0]
+    
+        seq_tensor, index_labels = process_input_batch(batch, args)
+
+        model.hidden = model.init_hidden(curr_batch_size)
+
+        preds_vector = model(seq_tensor)
+
+        _, preds_index = torch.max(preds_vector.data, dim=1)
+      
+        num_total += curr_batch_size
+        num_correct += (preds_index == index_labels).sum()
+
+
+    accuracy = num_correct / num_total
+    cprint(f"Test accuracy: {num_correct}/{num_total} ({accuracy}%)")
+        
+
+
 def parse_args():
     args = argparse.ArgumentParser()
     args.add_argument("--lr", default=1e-4)
-    args.add_argument("--batch-size", default=256)
+    args.add_argument("--batch-size", type=int, default=256)
     args.add_argument("--num-epochs", default=10)
 
     args.add_argument("--data-file", default="data/character_identity_cloze.csv")
     args.add_argument("--vocab", default="../data/comics_vocab.p")
 
     args.add_argument("--print-epoch", default=1)
+    args.add_argument("--data-limit", type=int, default=None, 
+        help="Pass in the number of rows you want the model to train and test for (useful for testing code)")
 
     args.add_argument("--gpuid", default=-1, type=int)
     return args.parse_args()
@@ -199,13 +261,23 @@ if __name__=="__main__":
     character_cloze_data_file = os.path.join(dirname, args.data_file)
     data_df = pd.read_csv(character_cloze_data_file)
 
+    if args.data_limit:
+        if args.data_limit < args.batch_size:
+            raise ValueError("Amount of used data cannot be smaller than batch size")
+
+        data_df = data_df[:args.data_limit]
+
+
     data_df.info()
     print(data_df.head())
 
     # Make sure there are no nulls
     assert(data_df[data_df.text.isnull()].empty)
 
-    train(data_df, args, vocab_len)
+    model = train(data_df, args, vocab_len)
+
+    # TODO: pass in test set instead
+    validate(model, data_df, args)
  
     
 
