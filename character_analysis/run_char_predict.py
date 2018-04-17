@@ -41,9 +41,11 @@ def train_epoch(data, des_batch_size, model, loss_function, optimizer):
 
     b_count = 0
 
+    print_mod = num_batches / 4
     for batch in np.array_split(data, num_batches):
 
-        print("Batch: ", b_count)
+        if batch % print_mod == 0:
+            print(f"Batch: {b_count}/{num_batches}")
         b_count += 1
 
         optimizer.zero_grad()
@@ -115,6 +117,8 @@ def train_epoch(data, des_batch_size, model, loss_function, optimizer):
         preds = model(seq_tensor)
 
         index_labels = torch.autograd.Variable(torch.LongTensor(is_char_label.astype(int)))
+        if args.gpuid > -1:
+            index_labels = index_labels.cuda()
 
         # print("pred:", preds.size())
         # print("label: ", index_labels)
@@ -181,7 +185,7 @@ if __name__=="__main__":
     if args.gpuid >= 0:
         torch.cuda.set_device(args.gpuid)
         using_gpu_string = "Using GPU {}"
-        print(colorize("Using GPU {}").format(torch.cuda.current_device()))
+        cprint(f"Using GPU #{torch.cuda.current_device()}", "yellow")
 
     cprint("Loading data...", "cyan")
 
