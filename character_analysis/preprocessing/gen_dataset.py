@@ -80,11 +80,14 @@ def gen_cloze_nonchar_data(comics_text, num_examples, heroes_all_names, villains
 
 # Given a sentence and a hero name, returns the sentence up to the hero name 
 def gen_cloze_char_sentence(line, name):
-    split_pos = line.find(name)
-    line_begin = line[:split_pos]
+    # Use \b to ensure we match the entire name, and ignore cases where the
+    #   name appears inside another word
+    re_pattern = r"(.*)\b" + re.escape(name) + r"\b"     
+    line_begin = re.search(re_pattern, line).group(1)
+    line_begin = line_begin.strip()
 
-    # print("\nName: ", name)
-    # print(line)
+    # split_pos = line.find(name)
+    # line_begin = line[:split_pos]
 
     return line_begin
     
@@ -108,12 +111,22 @@ def create_dataset():
     print("\n\nGenerating data with character names removed")
     generated_data = []
 
+    print_mod = 1000
     for line in comics_text:
         for hero in heroes_names.values:
             words = re.findall(r"\w+", line)
             if hero in words and words.index(hero) > min_num_words_in_line:
 
                 generated_line = gen_cloze_char_sentence(line, hero) 
+
+                if generated_line == "":
+                    print("\n-", generated_line, hero, "is char true", "hero")
+                    print("words: ", words)
+                    split_pos = line.find(hero)
+                    line_begin = line[:split_pos]
+                    print(split_pos)
+                    print(line_begin)
+                    raise ValueException("empty line was generated")
 
                 generated_data.append({TEXT: generated_line, 
                                        NEXT_WORD: hero,
@@ -131,10 +144,12 @@ def create_dataset():
                                        CHAR_TYPE: CHAR_TYPE_VILLAIN})
 
 
-        data_limit = 10000
+        data_limit = 8000
         if len(generated_data) == data_limit:
             print(f"Reached data limit of {data_limit}")
             break
+        if len(generated_data) % print_mod == 0:
+            print(f"{len(generated_data)}/{data_limit} lines added")
 
     print("\n\nGenerating data with random non-character names removed")
     len_char_data = len(generated_data)
@@ -150,6 +165,9 @@ def create_dataset():
 
 if __name__ == "__main__":
     dataset_df = create_dataset()
+    
+    if not dataset_df[data_df.text.isnull()].empty:
+        raise ValueException("Empty text was generated")
 
     dataset_df.to_csv(dataset_save_file, index=False, na_rep="None", columns=[IS_CHAR, CHAR_TYPE, NEXT_WORD, TEXT], quoting=csv.QUOTE_NONNUMERIC)
 
