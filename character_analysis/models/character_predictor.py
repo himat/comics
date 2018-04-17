@@ -9,6 +9,7 @@ from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class CharacterPredictor(nn.Module):
     
@@ -19,7 +20,7 @@ class CharacterPredictor(nn.Module):
         self.use_gpu = use_gpu
 
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
-        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_dim, bidirectional=True)
+        self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_dim, bidirectional=False)
         self.num_dirs = (2 if self.lstm.bidirectional else 1)
 
         print(f"numdirs: {self.num_dirs}")
@@ -41,11 +42,24 @@ class CharacterPredictor(nn.Module):
         
 
     def forward(self, sentence):
+        # print("sent: ", sentence.size())
         x = self.embedding(sentence)
-        print(f"x shape: {x.size()}")
+        # x = sentence
+
+        # print("x: ", x.size())
+        x = x.transpose(0,1) # Since not using batch first
+        # print("x: ", x.size())
+        # print("hidden: ", self.hidden[0].size())
+
         lstm_out, self.hidden = self.lstm(x, self.hidden)
+
+        # lstm_out = pad_packed_sequence(lstm_out)
+        # print(lstm_out[-1])
+        # last_output = torch.autograd.Variable(torch.FloatTensor(lstm_out[-1]))
+        # print("last out: ", last_output.size())
+
         y = self.hidden_to_label(lstm_out[-1])
-        log_probs = F.log_softmax(y)
+        log_probs = F.log_softmax(y, dim=1)
 
         return log_probs
 
