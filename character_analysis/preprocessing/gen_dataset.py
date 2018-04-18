@@ -12,7 +12,8 @@ heroes_file = os.path.join(dirname, "../data/heroes.csv")
 villains_unfiltered_file = os.path.join(dirname, "../data/villains_unfiltered.csv")
 villains_file = os.path.join(dirname, "../data/villains.csv")
 
-dataset_save_file = "../data/character_identity_cloze.csv"
+dataset_train_file = "../data/character_identity_cloze_train.csv"
+dataset_test_file = "../data/character_identity_cloze_test.csv"
 
 # Dataset variables
 TEXT = "text"
@@ -109,10 +110,17 @@ def create_dataset():
     villains_unfiltered_names = villains_unfiltered_names.str.lower()
 
     print("\n\nGenerating data with character names removed")
-    generated_data = []
+    generated_data_train = []
+    generated_data_test = []
+
+    curr_gen_data_ptr = generated_data_train
+    def flip_ptr(data_ptr): 
+        data_ptr = generated_data_train if data_ptr == generated_data_test else generated_data_test
+        return data_ptr
 
     print_mod = 1000
     for line in comics_text:
+        
         for hero in heroes_names.values:
             words = re.findall(r"\w+", line)
             if hero in words and words.index(hero) > min_num_words_in_line:
@@ -128,39 +136,47 @@ def create_dataset():
                     print(line_begin)
                     raise ValueException("empty line was generated")
 
-                generated_data.append({TEXT: generated_line, 
+                curr_gen_data_ptr.append({TEXT: generated_line, 
                                        NEXT_WORD: hero,
                                        IS_CHAR: True,
                                        CHAR_TYPE: CHAR_TYPE_HERO})
+                
+                curr_gen_data_ptr = flip_ptr(curr_gen_data_ptr)
+
         for villain in villains_names.values:
             words = re.findall(r"\w+", line)
             if villain in words and words.index(villain) > min_num_words_in_line:
 
                 generated_line = gen_cloze_char_sentence(line, villain) 
 
-                generated_data.append({TEXT: generated_line, 
+                curr_gen_data_ptr.append({TEXT: generated_line, 
                                        NEXT_WORD: villain,
                                        IS_CHAR: True,
                                        CHAR_TYPE: CHAR_TYPE_VILLAIN})
 
+                curr_gen_data_ptr = flip_ptr(curr_gen_data_ptr)
 
-        data_limit = 8000
-        if len(generated_data) == data_limit:
+
+        data_limit = 16000
+        if len(generated_data_test) == data_limit:
             print(f"Reached data limit of {data_limit}")
             break
         if len(generated_data) % print_mod == 0:
             print(f"{len(generated_data)}/{data_limit} lines added")
 
+    assert(len(generated_data_train) == len(generated_data_test))
+
     print("\n\nGenerating data with random non-character names removed")
-    len_char_data = len(generated_data)
+    len_char_data = len(generated_data_train)
     nonchar_data = gen_cloze_nonchar_data(comics_text, len_char_data, heroes_unfiltered_names, villains_unfiltered_names)
     generated_data += nonchar_data
 
     print(f"Generated {len_char_data} examples each of positive and negative cloze sentences")
 
-    generated_data_df = pd.DataFrame(generated_data)
+    generated_data_train_df = pd.DataFrame(generated_data_train)
+    generated_data_test_df = pd.DataFrame(generated_data_test)
 
-    return generated_data_df
+    return generated_data_train_df, generated_data_test_df
 
 
 if __name__ == "__main__":
