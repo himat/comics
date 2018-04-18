@@ -29,11 +29,39 @@ LABEL_SIZE = 2
 COL_TEXT = "text"
 COL_IS_CHAR = "is_char"
 
+
+def process_input_batch(batch, args):
+    text = batch[COL_TEXT].values
+    is_char_labels = batch[COL_IS_CHAR].values
+
+    words = [sentence.split() for sentence in text]
+    unk_encoding = vdict["UNK".encode("utf-8")]
+
+    text_transformed = [[vdict[w.encode("utf-8")] if w.encode("utf-8") in vdict else unk_encoding for w in seq] for seq in words]
+
+    seq_lens = torch.LongTensor(list(map(len, text_transformed)))
+    if args.gpuid > -1:
+        seq_lens = seq_lens.cuda()
+
+    seq_tensor = torch.autograd.Variable(torch.zeros((len(text_transformed), seq_lens.max())).long())
+    if args.gpuid > -1:
+        seq_tensor = seq_tensor.cuda()
+    for i, (seq, seqLen) in enumerate(zip(text_transformed, seq_lens)):
+        seq_tensor[i, :seqLen] = torch.LongTensor(seq)
+
+    seq_lens, perm_idx = seq_lens.sort(dim=0, descending=True)
+    seq_tensor = seq_tensor[perm_idx]
+
+    # labels
+    index_labels = torch.LongTensor(is_char_labels.astype(int))
+
+    return seq_tensor, index_labels
+
 def train_epoch(data, des_batch_size, model, loss_function, optimizer):
 
     num_batches = len(data) // des_batch_size
 
-    cprint(f"Number of batches: {num_batches}","blue")
+    print(f"Number of batches: {num_batches}")
 
     data = data.reindex(np.random.permutation(data.index))
 
@@ -41,7 +69,8 @@ def train_epoch(data, des_batch_size, model, loss_function, optimizer):
 
     b_count = 0
 
-    print_mod = num_batches / 4
+    print_mod = max(num_batches // 4, 1)
+    
     for batch in np.array_split(data, num_batches):
 
         if b_count % print_mod == 0:
@@ -130,6 +159,7 @@ def train_epoch(data, des_batch_size, model, loss_function, optimizer):
         loss.backward()
         optimizer.step()
 
+    return epoch_loss
 
 
 def train(data, args, vocab_len):
@@ -162,37 +192,10 @@ def train(data, args, vocab_len):
 
     return model
 
-def process_input_batch(batch, args):
-    text = batch[COL_TEXT].values
-    is_char_labels = batch[COL_IS_CHAR].values
 
-    words = [sentence.split() for sentence in text]
-    unk_encoding = vdict["UNK".encode("utf-8")]
+def validate(model, data, args, data_name=""):
 
-    text_transformed = [[vdict[w.encode("utf-8")] if w.encode("utf-8") in vdict else unk_encoding for w in seq] for seq in words]
-
-    seq_lens = torch.LongTensor(list(map(len, text_transformed)))
-    if args.gpuid > -1:
-        seq_lens = seq_lens.cuda()
-
-    seq_tensor = torch.autograd.Variable(torch.zeros((len(text_transformed), seq_lens.max())).long())
-    if args.gpuid > -1:
-        seq_tensor = seq_tensor.cuda()
-    for i, (seq, seqLen) in enumerate(zip(text_transformed, seq_lens)):
-        seq_tensor[i, :seqLen] = torch.LongTensor(seq)
-
-    seq_lens, perm_idx = seq_lens.sort(dim=0, descending=True)
-    seq_tensor = seq_tensor[perm_idx]
-
-    # labels
-    index_labels = torch.LongTensor(is_char_labels.astype(int))
-
-    return seq_tensor, index_labels
-
-
-def validate(model, data, args):
-
-    cprint(f"Testing mode", "blue")
+    cprint(f"Validation mode {data_name}", "blue")
 
     num_batches = len(data) // args.batch_size
 
@@ -216,7 +219,7 @@ def validate(model, data, args):
 
 
     accuracy = num_correct / num_total
-    cprint(f"Test accuracy: {num_correct}/{num_total} ({accuracy}%)")
+    cprint(f"Accuracy {data_name}: {num_correct}/{num_total} ({accuracy}%)")
         
 
 
@@ -226,7 +229,8 @@ def parse_args():
     args.add_argument("--batch-size", type=int, default=256)
     args.add_argument("--num-epochs", default=10)
 
-    args.add_argument("--data-file", default="data/character_identity_cloze.csv")
+    args.add_argument("--train-data-file", default="data/character_identity_cloze_train.csv")
+    args.add_argument("--test-data-file", default="data/character_identity_cloze_test.csv")
     args.add_argument("--vocab", default="../data/comics_vocab.p")
 
     args.add_argument("--print-epoch", default=1)
@@ -258,26 +262,34 @@ if __name__=="__main__":
     vdict, rvdict = pickle.load(open(args.vocab, 'rb'), encoding="bytes")
     vocab_len = len(vdict)
 
-    character_cloze_data_file = os.path.join(dirname, args.data_file)
-    data_df = pd.read_csv(character_cloze_data_file)
+    character_cloze_train_file = os.path.join(dirname, args.train_data_file)
+    train_data_df = pd.read_csv(character_cloze_train_file)
+    
+    character_cloze_test_file = os.path.join(dirname, args.test_data_file)
+    test_data_df = pd.read_csv(character_cloze_test_file)
 
     if args.data_limit:
         if args.data_limit < args.batch_size:
             raise ValueError("Amount of used data cannot be smaller than batch size")
 
-        data_df = data_df[:args.data_limit]
+        train_data_df = train_data_df[:args.data_limit]
+        test_data_df = test_data_df[:args.data_limit]
 
-
-    data_df.info()
-    print(data_df.head())
+    cprint("Train data", "blue")
+    train_data_df.info()
+    print(train_data_df.head())
+    cprint("Test data", "blue")
+    test_data_df.info()
+    print(test_data_df.head())
 
     # Make sure there are no nulls
-    assert(data_df[data_df.text.isnull()].empty)
+    assert(train_data_df[train_data_df.text.isnull()].empty)
+    assert(test_data_df[test_data_df.text.isnull()].empty)
 
-    model = train(data_df, args, vocab_len)
+    model = train(train_data_df, args, vocab_len)
 
-    # TODO: pass in test set instead
-    validate(model, data_df, args)
+    validate(model, train_data_df, args, data_name="train")
+    validate(model, test_data_df, args, data_name="test")
  
     
 

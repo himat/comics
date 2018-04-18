@@ -157,21 +157,23 @@ def create_dataset():
                 curr_gen_data_ptr = flip_ptr(curr_gen_data_ptr)
 
 
-        data_limit = 16000
+        data_limit = 9000
         if len(generated_data_test) == data_limit:
             print(f"Reached data limit of {data_limit}")
             break
-        if len(generated_data) % print_mod == 0:
-            print(f"{len(generated_data)}/{data_limit} lines added")
+        if len(generated_data_test) % print_mod == 0:
+            print(f"{len(generated_data_test)}/{data_limit} lines added")
 
     assert(len(generated_data_train) == len(generated_data_test))
 
     print("\n\nGenerating data with random non-character names removed")
     len_char_data = len(generated_data_train)
-    nonchar_data = gen_cloze_nonchar_data(comics_text, len_char_data, heroes_unfiltered_names, villains_unfiltered_names)
-    generated_data += nonchar_data
+    nonchar_data = gen_cloze_nonchar_data(comics_text, 2*len_char_data, heroes_unfiltered_names, villains_unfiltered_names)
+    generated_data_train += nonchar_data[:len_char_data]
+    generated_data_test += nonchar_data[len_char_data:]
 
     print(f"Generated {len_char_data} examples each of positive and negative cloze sentences")
+    assert(len(generated_data_train) == len(generated_data_test))
 
     generated_data_train_df = pd.DataFrame(generated_data_train)
     generated_data_test_df = pd.DataFrame(generated_data_test)
@@ -180,14 +182,18 @@ def create_dataset():
 
 
 if __name__ == "__main__":
-    dataset_df = create_dataset()
+    train_dataset_df, test_dataset_df = create_dataset()
     
-    if not dataset_df[data_df.text.isnull()].empty:
+    if not train_dataset_df[train_dataset_df.text.isnull()].empty:
+        raise ValueException("Empty text was generated")
+    if not test_dataset_df[test_dataset_df.text.isnull()].empty:
         raise ValueException("Empty text was generated")
 
-    dataset_df.to_csv(dataset_save_file, index=False, na_rep="None", columns=[IS_CHAR, CHAR_TYPE, NEXT_WORD, TEXT], quoting=csv.QUOTE_NONNUMERIC)
+    train_dataset_df.to_csv(dataset_train_file, index=False, na_rep="None", columns=[IS_CHAR, CHAR_TYPE, NEXT_WORD, TEXT], quoting=csv.QUOTE_NONNUMERIC)
+    test_dataset_df.to_csv(dataset_test_file, index=False, na_rep="None", columns=[IS_CHAR, CHAR_TYPE, NEXT_WORD, TEXT], quoting=csv.QUOTE_NONNUMERIC)
 
-    print(f"Saved dataset to {dataset_save_file}")
+    print(f"Saved train dataset to {dataset_train_file}")
+    print(f"Saved test dataset to {dataset_test_file}")
 
 
 
