@@ -2,6 +2,9 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import re
+import nltk
+import string
+from collections import defaultdict
 
 dirname = os.path.dirname(__file__)
 csv_heroes_all_file = os.path.join(dirname, "../data/heroes_unfiltered.csv")
@@ -18,6 +21,40 @@ villain_excludes = set(["Alternative versions of Joker"])
 remove_parens_find = r"(.*)\(.*\)"
 remove_parens_repl = r"\1"
 
+# Corpus vars
+brown_corpus = nltk.corpus.brown
+stopwords = nltk.corpus.stopwords.words("english")
+min_occurrences = 8 # The top corpus words have at least this many occurrences 
+
+def get_top_corpus_words(corpus, min_occurrences):
+
+    words = corpus.words()
+    words = map(lambda w: w.lower(), words)
+    words = filter(lambda w: w not in stopwords, words)
+    # Replace punctuation with empty string 
+    remove_punc_table = dict((ord(char), None) for char in string.punctuation)
+    words = [w.translate(remove_punc_table) for w in words]
+  
+    word_counts = defaultdict(int)
+    for word in words:
+        word_counts[word] += 1
+    
+    sorted_counts = sorted(word_counts.items(), key=lambda kv: kv[1], reverse=True)
+
+    num_larger = 0
+    for kv in sorted_counts:
+        if kv[1] < min_occurrences:
+            break
+        num_larger += 1
+
+    print(f"{num_larger}/{len(sorted_counts)} ({num_larger/len(sorted_counts)}) words appear at least {min_occurrences} times")
+
+    top_words = set(map(lambda kv: kv[0], sorted_counts[:num_larger]))
+
+    print(f"len: {len(top_words)}")
+
+    return top_words
+
 # Write to CSV in alphabetical order
 def write_set(file_name, char_set):
     with open(file_name, "w") as out_file:
@@ -27,24 +64,33 @@ def write_set(file_name, char_set):
 
 # process and verify given character name string
 # returns false if this character name should not be added to the real results
-def process_name(in_char_name):
+# also returns the char name with parens and quotes removed, and made lowercase
+def process_name(in_char_name, top_corpus_words):
 
     # Some hero names have the publisher in parens if multiple publishers had comics with the same hero name 
     char_name = re.sub(remove_parens_find, remove_parens_repl, in_char_name).strip() # remove anything in parens
     char_name = char_name.replace('"', '') # remove quotes if any in name
+    char_name = char_name.lower()
 
-    if char_name.isdigit(): # skip if character name is all numbers
+    if char_name == "question":
+        print(char_name, "found")
+    if char_name.lower() == "question":
+        print(char_name, "found after lower")
+
+    if len(char_name) <= 3: # Ignore short names
+        return False, char_name
+    if char_name.isdigit(): # Skip if character name is all numbers
         return False, char_name
     if char_name in hero_excludes:
         return False, char_name
     if char_name in villain_excludes:
         return False, char_name
-    if len(char_name) <= 3: # Ignore short names
+    if char_name in top_corpus_words: # Don't want words that are too common
         return False, char_name
 
     return True, char_name
 
-def download_protagonists():
+def download_protagonists(top_corpus_words):
     response = requests.get(golden_age_protagonists_page)
     root = BeautifulSoup(response.content, "html.parser")
 
@@ -69,7 +115,7 @@ def download_protagonists():
         num_heroes = len(all_heroes)
         for li in all_heroes:
 
-            add_to_set, hero_name = process_name(li.text)
+            add_to_set, hero_name = process_name(li.text, top_corpus_words)
             heroes_unfiltered.add(hero_name)
 
             if add_to_set:
@@ -77,14 +123,17 @@ def download_protagonists():
 
         print(f"Page {page_num} has {num_heroes} total heroes")
 
-    print(f"There are {len(heroes)} total heroes (without repeats)")
-    print(f"There are {len(heroes_unfiltered)} total heroes (without repeats and filtering)")
+    print(f"There are {len(heroes_unfiltered)} total heroes (without repeats)")
+    print(f"There are {len(heroes)} total heroes (without repeats after filtering)")
+    print(f"Excluded heroes: {heroes_unfiltered.difference(heroes)}")
 
     write_set(csv_heroes_file, heroes)
     write_set(csv_heroes_all_file, heroes_unfiltered)
     print(f"Saved heroes to {csv_heroes_file} and {csv_heroes_all_file}")
 
-def download_villains():
+def download_villains(top_corpus_words):
+    print("\n")
+
     response = requests.get(golden_age_villains_page)
     print(f"Villains page {golden_age_villains_page}")
     root = BeautifulSoup(response.content, "html.parser")
@@ -96,19 +145,27 @@ def download_villains():
 
     for name_div in names:
 
-        add_to_set, villain_name = process_name(name_div.text)
+        add_to_set, villain_name = process_name(name_div.text, top_corpus_words)
         villains_unfiltered.add(villain_name)
 
         if add_to_set:
             villains.add(villain_name) 
 
-    print(f"There are {len(villains)} villains (without repeats)")
-    print(f"There are {len(villains_unfiltered)} villains (without repeats and filtering)")
+    print(f"There are {len(villains_unfiltered)} villains (without repeats)")
+    print(f"There are {len(villains)} villains (without repeats after filtering)")
+    print(f"Excluded villains: {villains_unfiltered.difference(villains)}")
 
     write_set(csv_villains_file, villains)
     write_set(csv_villains_all_file, villains)
     print(f"Saved villains to {csv_villains_file} and {csv_villains_all_file}")
 
 if __name__=="__main__":
-    download_protagonists()
-    download_villains()
+
+    top_corpus_words = get_top_corpus_words(brown_corpus, min_occurrences)
+    print(len(top_corpus_words))
+
+    if "question" in top_corpus_words:
+        print("question in here")
+
+    download_protagonists(top_corpus_words)
+    download_villains(top_corpus_words)
