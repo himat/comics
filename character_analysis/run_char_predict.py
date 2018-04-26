@@ -26,9 +26,9 @@ EMB_DIM = 256
 HIDDEN_DIM = 150
 LABEL_SIZE = 2
 
-COL_TEXT = "text"
+COL_TEXT = "text" # x
+COL_IS_CHAR = "is_char" # y
 COL_NEXT_WORD = "next_word"
-COL_IS_CHAR = "is_char"
 COL_CHAR_TYPE = "char_type"
 
 def process_input_batch(batch, args):
