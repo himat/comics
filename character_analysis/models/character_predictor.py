@@ -22,6 +22,7 @@ class CharacterPredictor(nn.Module):
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_dim, bidirectional=False)
         self.num_dirs = (2 if self.lstm.bidirectional else 1)
+        assert self.num_dirs == 1
 
         print(f"numdirs: {self.num_dirs}")
 
@@ -36,9 +37,10 @@ class CharacterPredictor(nn.Module):
         c = torch.zeros(self.num_dirs, batch_size, self.hidden_dim)
  
         if self.use_gpu:
-            return (Variable(h.cuda()), Variable(c.cuda()))
-        else:
-            return (Variable(h), Variable(c))
+            h = h.cuda()
+            c = c.cuda()
+
+        return (Variable(h), Variable(c))
         
 
     def forward(self, sentence):

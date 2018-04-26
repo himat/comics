@@ -49,42 +49,59 @@ def process_input_batch(batch, args):
                 # seq_transformed.append(unk_encoding)
         # text_transformed_1.append(seq_transformed)
     text_transformed = [[vdict[w.encode("utf-8")] if w.encode("utf-8") in vdict else unk_encoding for w in seq] for seq in words]
+    # print(len(words))
+    # print(len(text_transformed))
+    # print("Len of all sentences")
+    # for l in text_transformed:
+        # print(len(l))
+    # print("---")
 
-    seq_lens = torch.LongTensor(list(map(len, text_transformed)))
-    if args.gpuid > -1:
-        seq_lens = seq_lens.cuda()
-    _, perm_idx = seq_lens.sort(dim=0, descending=True)
+    do_padding = False
 
-    # Pad and then pack
-    seq_tensor = torch.autograd.Variable(torch.zeros((len(text_transformed), seq_lens.max())).long())
-    if args.gpuid > -1:
-        seq_tensor = seq_tensor.cuda()
-    for i, (seq, seqLen) in enumerate(zip(text_transformed, seq_lens)):
-        seq_tensor[i, :seqLen] = torch.LongTensor(seq)
+    if not do_padding:
+        assert args.batch_size == 1, "batch size should be 1 if not using padding"
+        seq_tensor = torch.LongTensor(text_transformed)
+        seq_tensor = torch.autograd.Variable(seq_tensor)
 
-    seq_tensor = seq_tensor[perm_idx]
+    else:
+        seq_lens = torch.LongTensor(list(map(len, text_transformed)))
+        # if args.gpuid > -1:
+            # seq_lens = seq_lens.cuda()
+        _, perm_idx = seq_lens.sort(dim=0, descending=True)
+
+        # Pad and then pack
+        seq_tensor = torch.autograd.Variable(torch.zeros((len(text_transformed), seq_lens.max())).long())
+        # if args.gpuid > -1:
+            # seq_tensor = seq_tensor.cuda()
+        for i, (seq, seqLen) in enumerate(zip(text_transformed, seq_lens)):
+            seq_tensor[i, :seqLen] = torch.LongTensor(seq)
+
+        seq_tensor = seq_tensor[perm_idx]
+            
+        ### Can only use once you use pytorch 0.4, can remove padding stuff once that happens
+        # Convert to a list of Variables in sorted order using the perm_idx ordering
+        # text_transformed = [torch.autograd.Variable(torch.Tensor(text_transformed[ind])) for ind in perm_idx]
+        # text_packed = torch.nn.utils.rnn.pack_sequence(text_transformed)
         
-    ### Can only use once you use pytorch 0.4, can remove padding stuff once that happens
-    # Convert to a list of Variables in sorted order using the perm_idx ordering
-    # text_transformed = [torch.autograd.Variable(torch.Tensor(text_transformed[ind])) for ind in perm_idx]
-    # text_packed = torch.nn.utils.rnn.pack_sequence(text_transformed)
-    
-    ### Packing
-    # embedded_tensor = model.embedding(seq_tensor)
-    # print(f"seq tens: {seq_tensor.size()}")
-    # print(f"seq lens: {seq_lens.size()}")
-    # print(f"embed tens: {embedded_tensor.size()}")
-    # text_packed = pack_padded_sequence(embedded_tensor, seq_lens.cpu().numpy(), batch_first=True)
-    # print(type(text_transformed[0]))
-    # print(f"origin text: {text.shape}")
-    # print(f"new text: {len(text_transformed)}")
-    # print(f"packed: {len(text_packed)}")
-    #####
+        ### Packing
+        # embedded_tensor = model.embedding(seq_tensor)
+        # print(f"seq tens: {seq_tensor.size()}")
+        # print(f"seq lens: {seq_lens.size()}")
+        # print(f"embed tens: {embedded_tensor.size()}")
+        # text_packed = pack_padded_sequence(embedded_tensor, seq_lens.cpu().numpy(), batch_first=True)
+        # print(type(text_transformed[0]))
+        # print(f"origin text: {text.shape}")
+        # print(f"new text: {len(text_transformed)}")
+        # print(f"packed: {len(text_packed)}")
+        #####
 
     # labels
     index_labels = torch.autograd.Variable(torch.LongTensor(is_char_labels.astype(int)))
+    # if args.gpuid > -1:
+        # index_labels = index_labels.cuda()
+
     if args.gpuid > -1:
-        index_labels = index_labels.cuda()
+        seq_tensor = seq_tensor.cuda()
 
     return seq_tensor, index_labels
 
@@ -96,7 +113,8 @@ def train_epoch(data, args, model, loss_function, optimizer):
 
     data = data.reindex(np.random.permutation(data.index))
 
-    epoch_loss = 0
+    # epoch_loss = 0
+    epoch_avg_loss = 0
 
     b_count = 0
 
@@ -108,7 +126,8 @@ def train_epoch(data, args, model, loss_function, optimizer):
             print(f"Batch: {b_count}/{num_batches}")
         b_count += 1
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
+        model.zero_grad()
 
         curr_batch_size = batch.shape[0] 
         seq_tensor, index_labels = process_input_batch(batch, args)
@@ -117,16 +136,20 @@ def train_epoch(data, args, model, loss_function, optimizer):
 
         preds = model(seq_tensor)
 
+        if args.gpuid > -1:
+            preds = preds.cpu()
+
         loss = loss_function(preds, index_labels)
-        epoch_loss += loss.data[0]
+        epoch_avg_loss += loss.data[0]
 
         loss.backward()
         optimizer.step()
 
-    return epoch_loss
+    epoch_avg_loss /= data.shape[0]
+    return epoch_avg_loss
 
 
-def train(data, args, vocab_len):
+def train(train_data, test_data, args, vocab_len):
 
     model = CharacterPredictor(EMB_DIM, HIDDEN_DIM, vocab_len, LABEL_SIZE, args.gpuid >= 0)
 
@@ -134,8 +157,8 @@ def train(data, args, vocab_len):
         model = model.cuda()
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
-    # loss_function = nn.NLLLoss()
-    loss_function = nn.CrossEntropyLoss()
+    loss_function = nn.NLLLoss() # Add a log_softmax layer to model if using this loss
+    # loss_function = nn.CrossEntropyLoss()
 
     cprint("Training...", "blue")
 
@@ -146,13 +169,14 @@ def train(data, args, vocab_len):
         if epoch % args.print_epoch == 0:
             print(f"\nEpoch {epoch}")
     
-        epoch_loss = train_epoch(data, args, model, loss_function, optimizer)
+        epoch_avg_loss = train_epoch(train_data, args, model, loss_function, optimizer)
 
         if epoch % args.print_epoch == 0:
-            print(f"Epoch loss: {epoch_loss}")
+            print(f"Epoch avg loss: {epoch_avg_loss}")
 
         # TODO: no need to  go through all data again, just calculate stats in train_epoch
-        validate(model, data, args, data_name="train")
+        validate(model, train_data, args, data_name="train")
+        validate(model, test_data, args, data_name="test")
 
     print("Done training")
 
@@ -229,7 +253,7 @@ def validate(model, data, args, data_name=""):
 
 def parse_args():
     args = argparse.ArgumentParser()
-    args.add_argument("--lr", type=float, default=1e-4)
+    args.add_argument("--lr", type=float, default=1e-3)
     args.add_argument("--batch-size", type=int, default=256)
     args.add_argument("--num-epochs", type=int, default=10)
 
@@ -246,6 +270,7 @@ def parse_args():
 
 if __name__=="__main__":
     args = parse_args()
+    print(args)
 
     if torch.cuda.is_available() and args.gpuid < 0:
         cprint("WARNING: You have a CUDA device, so you should run with --gpuid 0", "red")
@@ -300,7 +325,7 @@ if __name__=="__main__":
     assert(not train_data_df.isnull().values.any())
     assert(not test_data_df.isnull().values.any())
 
-    model = train(train_data_df, args, vocab_len)
+    model = train(train_data_df, test_data_df, args, vocab_len)
 
     validate(model, test_data_df, args, data_name="test")
  
