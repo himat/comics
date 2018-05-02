@@ -30,6 +30,7 @@ COL_TEXT = "text" # x
 COL_IS_CHAR = "is_char" # y
 COL_NEXT_WORD = "next_word"
 COL_CHAR_TYPE = "char_type"
+COL_POST_TEXT = "post_text"
 
 def process_input_batch(batch, args):
     text = batch[COL_TEXT].values
@@ -299,6 +300,8 @@ if __name__=="__main__":
     character_cloze_test_file = os.path.join(dirname, args.test_data_file)
     test_data_df = pd.read_csv(character_cloze_test_file, dtype=col_dtypes, keep_default_na=False, na_values={COL_NEXT_WORD: ""})
 
+    # Get data up to the limit
+    # Note that this uses the unshuffled data, so all data of a class will be grouped together
     if args.data_limit:
         if args.data_limit < args.batch_size:
             raise ValueError("Amount of used data cannot be smaller than batch size")
@@ -306,11 +309,6 @@ if __name__=="__main__":
         train_data_df = train_data_df[:args.data_limit]
         test_data_df = test_data_df[:args.data_limit]
 
-    # cprint("Remove this size limiter", "red")
-    # train_data_df = train_data_df[1500:13500]
-    # test_data_df = test_data_df[1500:13500]
-
-    cprint("Move this up", "red")
     train_data_df = train_data_df.sample(frac=1).reset_index(drop=True)
     test_data_df = test_data_df.sample(frac=1).reset_index(drop=True)
     
@@ -322,8 +320,9 @@ if __name__=="__main__":
     print(test_data_df.head())
 
     # Make sure there are no nulls anywhere
-    assert(not train_data_df.isnull().values.any())
-    assert(not test_data_df.isnull().values.any())
+    # It's fine for post text to have nulls (empty strings)
+    assert(not train_data_df.drop([COL_POST_TEXT], axis=1).isnull().values.any())
+    assert(not test_data_df.drop([COL_POST_TEXT], axis=1).isnull().values.any())
 
     model = train(train_data_df, test_data_df, args, vocab_len)
 

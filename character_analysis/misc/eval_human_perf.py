@@ -43,7 +43,7 @@ def eval_human(num_samples, show_labels):
 
     for ind, ex in chosen_exs.iterrows():
         count += 1
-        cprint("\n(" + count + "/" + num_samples + ")  " ex[COL_TEXT], "cyan")
+        cprint("\n(" + str(count) + "/" + str(num_samples) + ")  " +  ex[COL_TEXT], "cyan")
 
         user_choice = None
 
