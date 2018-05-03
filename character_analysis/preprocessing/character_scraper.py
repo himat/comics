@@ -24,8 +24,9 @@ remove_parens_repl = r"\1"
 # Corpus vars
 brown_corpus = nltk.corpus.brown
 stopwords = nltk.corpus.stopwords.words("english")
-min_occurrences = 8 # The top corpus words have at least this many occurrences 
+min_occurrences = 6 # The top corpus words have at least this many occurrences 
 
+# If a character name is in the top words, that name is not saved
 def get_top_corpus_words(corpus, min_occurrences):
 
     words = corpus.words()
@@ -47,7 +48,7 @@ def get_top_corpus_words(corpus, min_occurrences):
             break
         num_larger += 1
 
-    print(f"{num_larger}/{len(sorted_counts)} ({num_larger/len(sorted_counts)}) words appear at least {min_occurrences} times")
+    print(f"{num_larger}/{len(sorted_counts)} ({100 * num_larger/len(sorted_counts)}%) words appear at least {min_occurrences} times in the Brown corpus (character names matching these words will be excluded)")
 
     top_words = set(map(lambda kv: kv[0], sorted_counts[:num_larger]))
 
@@ -71,11 +72,6 @@ def process_name(in_char_name, top_corpus_words):
     char_name = re.sub(remove_parens_find, remove_parens_repl, in_char_name).strip() # remove anything in parens
     char_name = char_name.replace('"', '') # remove quotes if any in name
     char_name = char_name.lower()
-
-    if char_name == "question":
-        print(char_name, "found")
-    if char_name.lower() == "question":
-        print(char_name, "found after lower")
 
     if len(char_name) <= 3: # Ignore short names
         return False, char_name
@@ -162,10 +158,9 @@ def download_villains(top_corpus_words):
 if __name__=="__main__":
 
     top_corpus_words = get_top_corpus_words(brown_corpus, min_occurrences)
-    print(len(top_corpus_words))
 
-    if "question" in top_corpus_words:
-        print("question in here")
+    print(f"question in top words: {'question' in top_corpus_words}")
+    print(f"butterfly in top words: {'butterfly' in top_corpus_words}")
 
     download_protagonists(top_corpus_words)
     download_villains(top_corpus_words)

@@ -30,6 +30,8 @@ personal_pronouns = ["I", "you", "he", "she", "it", "we", "they", "me", "him", "
 
 # How many each of positive and negative examples to generate
 num_examples = 19000
+# How often to print during generation
+print_mod = 1000
 
 # Each beginning line in the generated data needs to have at least this many 
 #   words so that we don't use lines where the character name appears right at 
@@ -44,10 +46,8 @@ def gen_cloze_nonchar_data(comics_text, num_examples, heroes_all_names, villains
 
     generated_nonchar_data = []
 
+    prev_print_len = None
     for line in comics_text:
-
-        if len(generated_nonchar_data) == num_examples:
-            break
 
         words = re.findall(r"\w+", line)
         num_words = len(words)
@@ -78,6 +78,7 @@ def gen_cloze_nonchar_data(comics_text, num_examples, heroes_all_names, villains
         # TODO: should a regex here be used instead if rfind finds words that 
         #       are a part of other words? It should only find the whole word
         chosen_word_start_pos = line.rfind(chosen_word)
+        assert(chosen_word_start_pos > -1)
         line_begin = line[:chosen_word_start_pos]
         line_rest = line[chosen_word_start_pos+1:]
 
@@ -90,8 +91,16 @@ def gen_cloze_nonchar_data(comics_text, num_examples, heroes_all_names, villains
                                        COL_IS_CHAR: False,
                                        COL_CHAR_TYPE: "None"})
 
+        if len(generated_nonchar_data) == num_examples:
+            print(f"Reached data limit of {num_examples}")
+            break
+        if len(generated_nonchar_data) % print_mod == 0 and len(generated_nonchar_data) != prev_print_len:
+            print(f"{len(generated_nonchar_data)}/{num_examples} lines added")
+            prev_print_len = len(generated_nonchar_data)
+
+
     if len(generated_nonchar_data) < num_examples:
-        raise Exception("not enough examples in data which satisfy requirements")
+        raise ValueError("not enough examples in data which satisfy requirements")
 
     return generated_nonchar_data
 
@@ -125,7 +134,6 @@ def gen_cloze_char_data(comics_text, num_examples, heroes_names, villains_names)
         data_ptr = generated_data_train if data_ptr == generated_data_test else generated_data_test
         return data_ptr
 
-    print_mod = 1000
     prev_print_len = None
     for line in comics_text:
         words = re.findall(r"\w+", line)
@@ -172,6 +180,9 @@ def gen_cloze_char_data(comics_text, num_examples, heroes_names, villains_names)
         if len(generated_data_test) % print_mod == 0 and len(generated_data_test) != prev_print_len:
             print(f"{len(generated_data_test)}/{num_examples} lines added")
             prev_print_len = len(generated_data_test)
+
+    if len(generated_data_test) < num_examples:
+        raise ValueError("not enough examples in data which satisfy requirements")
 
     assert(len(generated_data_train) == len(generated_data_test))
 

@@ -5,6 +5,7 @@ vgg16/
 */__pycache__/*
 
 character_analysis/their_lstm_sentence_classifier/
+character_analysis/data/stanford-ner/
 
 **/*.pyc
 preprocess/*.pyc
