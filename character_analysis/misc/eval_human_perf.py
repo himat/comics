@@ -20,6 +20,7 @@ COL_TEXT = "text"
 COL_IS_CHAR = "is_char"
 COL_NEXT_WORD = "next_word"
 COL_CHAR_TYPE = "char_type"
+COL_POST_TEXT = "post_text"
 
 default_train_file = os.path.join(dirname, "../data/character_identity_cloze_train.csv")
 default_test_file = os.path.join(dirname, "../data/character_identity_cloze_test.csv")
@@ -65,6 +66,7 @@ def eval_human(num_samples, show_labels):
         if show_labels:
             print(f"True answer: {int(ex[COL_IS_CHAR])}")
             print(f"Next word: {ex[COL_NEXT_WORD]}")
+            print(f"Post text: {ex[COL_POST_TEXT]}")
 
 
     true_labels = chosen_exs[COL_IS_CHAR].values
