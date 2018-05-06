@@ -19,10 +19,13 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 # from models import CharacterPredictor
 from models.character_predictor import CharacterPredictor
+sys.path.append('..')
+from utils import glove
 
 dirname = os.path.dirname(__file__)
 
-EMB_DIM = 256
+# TODO: try 300
+EMB_DIM = 200#256
 HIDDEN_DIM = 150
 LABEL_SIZE = 2
 
@@ -152,7 +155,12 @@ def train_epoch(data, args, model, loss_function, optimizer):
 
 def train(train_data, test_data, args, vocab_len):
 
-    model = CharacterPredictor(EMB_DIM, HIDDEN_DIM, vocab_len, LABEL_SIZE, args.gpuid >= 0)
+    pretrained_emb_vec = None
+    if args.pretrained_emb:
+        cprint("Using pretrained embeddings", "cyan")
+        pretrained_emb_vec = glove.load_glove_embeddings(EMB_DIM, vdict)
+
+    model = CharacterPredictor(EMB_DIM, HIDDEN_DIM, vocab_len, LABEL_SIZE, args.gpuid >= 0, pretrained_emb=pretrained_emb_vec)
 
     if args.gpuid >= 0:
         model = model.cuda()
@@ -261,6 +269,8 @@ def parse_args():
     args.add_argument("--train-data-file", default="data/character_identity_cloze_train.csv")
     args.add_argument("--test-data-file", default="data/character_identity_cloze_test.csv")
     args.add_argument("--vocab", default="../data/comics_vocab.p")
+
+    args.add_argument("--pretrained-emb", action="store_true", help="Use pretained word embeddings")
 
     args.add_argument("--print-epoch", type=int, default=1)
     args.add_argument("--data-limit", type=int, default=None, 

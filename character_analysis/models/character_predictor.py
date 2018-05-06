@@ -13,13 +13,17 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class CharacterPredictor(nn.Module):
     
-    def __init__(self, embedding_dim, hidden_dim, vocab_size, label_size, use_gpu):
+    def __init__(self, embedding_dim, hidden_dim, vocab_size, label_size, use_gpu, pretrained_emb=None):
         super(CharacterPredictor, self).__init__()
 
         self.hidden_dim = hidden_dim
         self.use_gpu = use_gpu
 
+        assert pretrained_emb.shape == (vocab_size, embedding_dim)
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        if pretrained_emb is not None:
+            self.embedding.weight = nn.Parameter(pretrained_emb)
+
         self.lstm = nn.LSTM(input_size=embedding_dim, hidden_size=hidden_dim, bidirectional=False)
         self.num_dirs = (2 if self.lstm.bidirectional else 1)
         assert self.num_dirs == 1
