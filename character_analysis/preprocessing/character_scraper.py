@@ -1,10 +1,11 @@
-import os
+import os, sys
 import requests
 from bs4 import BeautifulSoup
 import re
-import nltk
 import string
 from collections import defaultdict
+import nltk
+import enchant
 
 dirname = os.path.dirname(__file__)
 csv_heroes_all_file = os.path.join(dirname, "../data/heroes_unfiltered.csv")
@@ -24,11 +25,11 @@ remove_parens_repl = r"\1"
 # Corpus vars
 brown_corpus = nltk.corpus.brown
 stopwords = nltk.corpus.stopwords.words("english")
-min_occurrences = 6 # The top corpus words have at least this many occurrences 
+# english_dict = set(nltk.corpus.wordnet.words())
+english_dict = enchant.Dict("en_US")
+min_occurrences = 2 # The top corpus words have at least this many occurrences 
 
-# If a character name is in the top words, that name is not saved
-def get_top_corpus_words(corpus, min_occurrences):
-
+def get_corpus_word_counts(corpus):
     words = corpus.words()
     words = map(lambda w: w.lower(), words)
     words = filter(lambda w: w not in stopwords, words)
@@ -39,6 +40,13 @@ def get_top_corpus_words(corpus, min_occurrences):
     word_counts = defaultdict(int)
     for word in words:
         word_counts[word] += 1
+
+    return word_counts
+
+# If a character name is in the top words, that name is not saved
+def get_top_corpus_words(corpus, min_occurrences):
+
+    word_counts = get_corpus_word_counts(corpus)
     
     sorted_counts = sorted(word_counts.items(), key=lambda kv: kv[1], reverse=True)
 
@@ -81,7 +89,10 @@ def process_name(in_char_name, top_corpus_words):
         return False, char_name
     if char_name in villain_excludes:
         return False, char_name
-    if char_name in top_corpus_words: # Don't want words that are too common
+    # if char_name in top_corpus_words: # Don't want words that are too common
+        # return False, char_name
+    if english_dict.check(char_name):
+    # if char_name in english_dict:
         return False, char_name
 
     return True, char_name
@@ -121,7 +132,8 @@ def download_protagonists(top_corpus_words):
 
     print(f"There are {len(heroes_unfiltered)} total heroes (without repeats)")
     print(f"There are {len(heroes)} total heroes (without repeats after filtering)")
-    print(f"Excluded heroes: {heroes_unfiltered.difference(heroes)}")
+    excluded_heroes = heroes_unfiltered.difference(heroes)
+    print(f"Excluded heroes ({len(excluded_heroes)}/{len(heroes_unfiltered)}): {sorted(excluded_heroes)}")
 
     write_set(csv_heroes_file, heroes)
     write_set(csv_heroes_all_file, heroes_unfiltered)
@@ -149,11 +161,18 @@ def download_villains(top_corpus_words):
 
     print(f"There are {len(villains_unfiltered)} villains (without repeats)")
     print(f"There are {len(villains)} villains (without repeats after filtering)")
-    print(f"Excluded villains: {villains_unfiltered.difference(villains)}")
+    excluded_villains = villains_unfiltered.difference(villains)
+    print(f"Excluded villains ({len(excluded_villains)}/{len(villains_unfiltered)}): {sorted(excluded_villains)}")
 
     write_set(csv_villains_file, villains)
     write_set(csv_villains_all_file, villains)
     print(f"Saved villains to {csv_villains_file} and {csv_villains_all_file}")
+
+def get_word_count(word):
+
+    word_counts = get_corpus_word_counts(brown_corpus)
+
+    return(word_counts[word])
 
 if __name__=="__main__":
 

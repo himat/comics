@@ -45,7 +45,7 @@ def gen_cloze_nonchar_data(comics_text, num_examples, heroes_all_names, villains
     print("\n\nGenerating data with random non-character names removed")
 
     generated_nonchar_data = []
-
+    
     prev_print_len = None
     for line in comics_text:
 
@@ -163,7 +163,7 @@ def gen_cloze_char_data(comics_text, num_examples, heroes_names, villains_names)
         for villain in villains_names.values:
             if villain in words and words.index(villain) > min_num_words_in_line:
 
-                line_begin, line_rest= gen_cloze_char_sentence(line, villain) 
+                line_begin, line_rest = gen_cloze_char_sentence(line, villain) 
 
                 curr_gen_data_ptr.append({COL_TEXT: line_begin, 
                                           COL_NEXT_WORD: villain,
@@ -182,10 +182,16 @@ def gen_cloze_char_data(comics_text, num_examples, heroes_names, villains_names)
             prev_print_len = len(generated_data_test)
 
     if len(generated_data_test) < num_examples:
-        raise ValueError("not enough examples in data which satisfy requirements")
+        print("********Not enough examples in data which satisfy requirements")
+        print(f"Only generated {len(generated_data_test)} examples")
+        # raise ValueError("not enough examples in data which satisfy requirements")
+
+    if len(generated_data_train) != len(generated_data_test):
+        min_len = min(len(generated_data_train), len(generated_data_test))
+        generated_data_train = generated_data_train[:min_len]
+        generated_data_test = generated_data_test[:min_len]
 
     assert(len(generated_data_train) == len(generated_data_test))
-
     return generated_data_train, generated_data_test
 
 
@@ -207,15 +213,24 @@ def create_dataset():
 
     generated_data_train, generated_data_test = [], []
 
+    print(f"comics_text has {len(comics_text)} rows")
+
     char_data_train, char_data_test = gen_cloze_char_data(comics_text, num_examples, heroes_names, villains_names)
-    assert(len(char_data_train) == num_examples and len(char_data_test) == num_examples)
+    num_char_examples_made = len(char_data_test)
     generated_data_train += char_data_train
     generated_data_test += char_data_test
 
+    print("train len: ", len(generated_data_train))
+    print("test len: ", len(generated_data_test))
+
     # TODO: make gen_cloze_nonchar_data work the same way as for char, where it returns both train/test so you don't have to multiply num_examples by 2
-    nonchar_data = gen_cloze_nonchar_data(comics_text, 2*num_examples, heroes_unfiltered_names, villains_unfiltered_names)
-    generated_data_train += nonchar_data[:num_examples]
-    generated_data_test += nonchar_data[num_examples:]
+    nonchar_data = gen_cloze_nonchar_data(comics_text, 2*num_char_examples_made, heroes_unfiltered_names, villains_unfiltered_names)
+    generated_data_train += nonchar_data[:num_char_examples_made]
+    generated_data_test += nonchar_data[num_char_examples_made:]
+    assert(len(nonchar_data)/2 == num_char_examples_made)
+    
+    print("train len: ", len(generated_data_train))
+    print("test len: ", len(generated_data_test))
 
     print(f"Generated {len(nonchar_data)//2} examples each of positive and negative cloze sentences")
     assert(len(generated_data_train) == len(generated_data_test))
